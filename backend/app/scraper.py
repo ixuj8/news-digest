@@ -9,6 +9,8 @@ from datetime import datetime
 from app.database import SessionLocal
 from app.models import Source
 from sqlalchemy import text
+import socket
+import json
 
 # Configure Structured Logging
 logging.basicConfig(
@@ -47,6 +49,23 @@ class BaseScraper(ABC):
         """Parse raw content into standardized article dicts."""
         pass
 
+    def send_to_tcp_server(self, articles, host="localhost", port=9999):
+            if not articles:
+                return
+
+            try:
+                with socket.create_connection((host, port), timeout=5) as sock:
+                    for art in articles:
+                        # Convert datetime object to ISO format string for JSON serialization
+                        if art.get("published_at"):
+                            art["published_at"] = art["published_at"].isoformat()
+
+                        payload = json.dumps(art) + "\n"
+                        sock.sendall(payload.encode("utf-8"))
+                logger.info(f"Successfully transmitted {len(articles)} items to TCP ingest server.")
+            except Exception as e:
+                logger.error(f"Failed to connect or send data to TCP server: {e}")
+
 class RSSScraper(BaseScraper):
     def is_allowed_by_robots(self) -> bool:
         """Bypass for known RSS feeds."""
@@ -80,29 +99,6 @@ class RSSScraper(BaseScraper):
             })
         return articles
 
-    def save_to_db(self, articles):
-        db = SessionLocal()
-        new_count = 0
-        try:
-            for art in articles:
-                query = text("SELECT id FROM articles WHERE url = :url")
-                existing = db.execute(query, {"url": art["url"]}).fetchone()
-
-                if not existing:
-                    insert_query = text("""
-                        INSERT INTO articles (source_id, title, url, snippet, published_at)
-                        VALUES (:source_id, :title, :url, :snippet, :published_at)
-                    """)
-                    db.execute(insert_query, art)
-                    new_count += 1
-            db.commit()
-            logger.info(f"Successfully added {new_count} new articles for source ID {self.source_id}.")
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error saving articles for source {self.source_id}: {e}")
-        finally:
-            db.close()
-
 def run_scraper_task(source_id: int, feed_url: str, kind: str):
     """Worker function executed by ThreadPoolExecutor."""
     if kind == "rss":
@@ -110,7 +106,7 @@ def run_scraper_task(source_id: int, feed_url: str, kind: str):
         raw_data = scraper.fetch()
         items = scraper.parse(raw_data)
         if items:
-            scraper.save_to_db(items)
+            scraper.send_to_tcp_server(items)
         time.sleep(1) # Polite delay per host
     else:
         logger.warning(f"Scraper kind '{kind}' not supported yet.")
