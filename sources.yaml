@@ -1,0 +1,16 @@
+sections:
+  - name: tech
+    sources:
+      - name: "Hacker News"
+        feed_url: "https://news.ycombinator.com/rss"
+        kind: "rss"
+  - name: world
+    sources:
+      - name: "BBC World"
+        feed_url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+        kind: "rss"
+  - name: entertainment
+    sources:
+      - name: "Variety"
+        feed_url: "https://variety.com/feed/"
+        kind: "rss"
