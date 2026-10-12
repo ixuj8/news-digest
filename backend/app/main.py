@@ -1,5 +1,6 @@
 from typing import List, Optional
 from fastapi import FastAPI, Depends, Query, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from concurrent.futures import ThreadPoolExecutor
 import logging
 from sqlalchemy.orm import Session
@@ -11,6 +12,15 @@ from app.schemas import SectionResponse, SourceResponse, ArticleResponse
 from app.scraper import run_scraper_task
 
 app = FastAPI(title="News Digest API", version="1.0.0")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite's default dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Dependency to get DB session
 def get_db():
