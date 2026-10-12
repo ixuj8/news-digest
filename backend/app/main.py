@@ -6,10 +6,17 @@ import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.routers import auth
+from app.database import engine
+from app.models import Base
+
 # Import DB session factory and Pydantic models
 from app.database import SessionLocal
 from app.schemas import SectionResponse, SourceResponse, ArticleResponse
 from app.scraper import run_scraper_task
+
+# Create tables if they do not exist
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="News Digest API", version="1.0.0")
 
@@ -21,6 +28,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Register auth router
+app.include_router(auth.router)
 
 # Dependency to get DB session
 def get_db():

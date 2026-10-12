@@ -7,8 +7,21 @@ function App() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('jwt_token') || null);
 
-  // 1. Fetch sections on mount
+  // Capture token from URL query params after GitHub redirect callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      localStorage.setItem('jwt_token', urlToken);
+      setToken(urlToken);
+      // Clean up URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // Fetch sections on mount
   useEffect(() => {
     fetch('http://localhost:8000/sections')
       .then((res) => {
@@ -22,7 +35,7 @@ function App() {
       .catch((err) => setError(err.message));
   }, []);
 
-  // 2. Fetch articles when selectedSection changes
+  // Fetch articles when selectedSection changes
   useEffect(() => {
     setLoading(true);
     const url = selectedSection
@@ -44,11 +57,33 @@ function App() {
       });
   }, [selectedSection]);
 
+  const handleLogin = () => {
+    window.location.href = 'http://localhost:8000/auth/github/login';
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('jwt_token');
+    setToken(null);
+  };
+
   if (error) return <div style={{ color: 'red', padding: '2rem' }}>Error: {error}</div>;
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>News Aggregator</h1>
+
+      {/* Header */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <h1 style={{ margin: 0 }}>News Digest</h1>
+        {token ? (
+          <button onClick={handleLogout} style={{ padding: '8px 12px', cursor: 'pointer' }}>
+            Logout
+          </button>
+        ) : (
+          <button onClick={handleLogin} style={{ padding: '8px 12px', cursor: 'pointer', background: '#24292e', color: '#fff', border: 'none', borderRadius: '4px' }}>
+            Login with GitHub
+          </button>
+        )}
+      </header>
 
       {/* Section Tabs */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '2rem', borderBottom: '1px solid #ccc', paddingBottom: '1rem' }}>

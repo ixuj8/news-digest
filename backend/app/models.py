@@ -1,8 +1,16 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
+from app.database import Base
 
-Base = declarative_base()
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    github_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Section(Base):
     __tablename__ = "sections"
