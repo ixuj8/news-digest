@@ -9,7 +9,7 @@ CREATE TABLE sources (
   id SERIAL PRIMARY KEY,
   section_id INT REFERENCES sections(id),
   name TEXT NOT NULL,
-  feed_url TEXT NOT NULL,
+  url TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'rss'     -- rss or html
 );
 
