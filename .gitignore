@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Environment variables & secrets
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# OS specific
+.DS_Store
+Thumbs.db
