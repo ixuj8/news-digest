@@ -1,15 +1,41 @@
+import logging
+import time
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 import feedparser
 from datetime import datetime
-import time
 from app.database import SessionLocal
 from app.models import Source
 from sqlalchemy import text
+
+# Configure Structured Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [Thread: %(threadName)s] %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+USER_AGENT = "NewsDigestBot/1.0 (+https://github.com/ixuj8/news-digest)"
 
 class BaseScraper(ABC):
     def __init__(self, source_id: int, url: str):
         self.source_id = source_id
         self.url = url
+
+    def is_allowed_by_robots(self) -> bool:
+        """Check target site's robots.txt policy."""
+        parsed_url = urlparse(self.url)
+        robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
+        rp = RobotFileParser()
+        try:
+            rp.set_url(robots_url)
+            rp.read()
+            return rp.can_fetch(USER_AGENT, self.url)
+        except Exception:
+            # Default to allowed if robots.txt is unreachable
+            return True
 
     @abstractmethod
     def fetch(self):
@@ -22,11 +48,23 @@ class BaseScraper(ABC):
         pass
 
 class RSSScraper(BaseScraper):
+    def is_allowed_by_robots(self) -> bool:
+        """Bypass for known RSS feeds."""
+        return True
+
     def fetch(self):
-        print(f"Fetching RSS feed from {self.url}...")
-        return feedparser.parse(self.url)
+        if not self.is_allowed_by_robots():
+            logger.warning(f"Blocked by robots.txt: {self.url}")
+            return None
+
+        logger.info(f"Fetching RSS feed from {self.url}...")
+        # handle User-Agent via agent parameter
+        return feedparser.parse(self.url, agent=USER_AGENT)
 
     def parse(self, feed):
+        if not feed or not hasattr(feed, "entries"):
+            return []
+
         articles = []
         for entry in feed.entries:
             published_at = None
@@ -58,22 +96,24 @@ class RSSScraper(BaseScraper):
                     db.execute(insert_query, art)
                     new_count += 1
             db.commit()
-            print(f"Successfully added {new_count} new articles.")
+            logger.info(f"Successfully added {new_count} new articles for source ID {self.source_id}.")
         except Exception as e:
             db.rollback()
-            print(f"Error saving articles: {e}")
+            logger.error(f"Error saving articles for source {self.source_id}: {e}")
         finally:
             db.close()
 
-class HTMLScraper(BaseScraper):
-    def fetch(self):
-        print(f"Fetching HTML page from {self.url}...")
-        # Stub: Implement requests + BeautifulSoup logic later
-        return None
-
-    def parse(self, html_content):
-        # Stub for custom HTML parsing
-        return []
+def run_scraper_task(source_id: int, feed_url: str, kind: str):
+    """Worker function executed by ThreadPoolExecutor."""
+    if kind == "rss":
+        scraper = RSSScraper(source_id=source_id, url=feed_url)
+        raw_data = scraper.fetch()
+        items = scraper.parse(raw_data)
+        if items:
+            scraper.save_to_db(items)
+        time.sleep(1) # Polite delay per host
+    else:
+        logger.warning(f"Scraper kind '{kind}' not supported yet.")
 
 if __name__ == "__main__":
     db = SessionLocal()
@@ -81,16 +121,16 @@ if __name__ == "__main__":
         sources = db.query(Source).all()
 
         if not sources:
-            print("No sources found in the database. Run `python -m app.loader` first!")
-
-        for source in sources:
-            print(f"\n--- Running scraper for: {source.name} ({source.feed_url}) ---")
-            if source.kind == "rss":
-                scraper = RSSScraper(source_id=source.id, url=source.feed_url)
-                raw_data = scraper.fetch()
-                items = scraper.parse(raw_data)
-                scraper.save_to_db(items)
-            else:
-                print(f"Scraper kind '{source.kind}' not supported yet.")
+            logger.info("No sources found in the database.")
+        else:
+            logger.info(f"Starting concurrent scrape for {len(sources)} sources...")
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = [
+                    executor.submit(run_scraper_task, source.id, source.feed_url, source.kind)
+                    for source in sources
+                ]
+                for future in as_completed(futures):
+                    future.result()
+            logger.info("All scraping tasks completed successfully.")
     finally:
         db.close()
