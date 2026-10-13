@@ -1,8 +1,16 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, ForeignKey, Table
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from pgvector.sqlalchemy import Vector
 from app.database import Base
+
+# Many-to-many table for user-selected sections
+user_sections = Table(
+    "user_sections",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id"), primary_key=True),
+    Column("section_id", Integer, ForeignKey("sections.id"), primary_key=True),
+)
 
 class User(Base):
     __tablename__ = "users"
@@ -11,6 +19,16 @@ class User(Base):
     github_id = Column(BigInteger, unique=True, index=True, nullable=False)
     username = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship to sections via user_sections table
+    sections = relationship("Section", secondary=user_sections, backref="users")
+
+class UserTopic(Base):
+    __tablename__ = "user_topics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    topic = Column(String, nullable=False)
 
 class Section(Base):
     __tablename__ = "sections"

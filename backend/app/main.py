@@ -6,7 +6,7 @@ import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.routers import auth
+from app.routers import auth, settings
 from app.database import engine
 from app.models import Base
 
@@ -31,6 +31,7 @@ app.add_middleware(
 
 # Register auth router
 app.include_router(auth.router)
+app.include_router(settings.router)
 
 # Dependency to get DB session
 def get_db():

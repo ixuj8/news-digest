@@ -1,22 +1,14 @@
-import os
 import httpx
 import jwt
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from app.config import GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, JWT_SECRET, JWT_ALGORITHM
 from app.database import get_db
 from app.models import User
-from dotenv import load_dotenv
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# Environment variables
-load_dotenv()
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "your_client_id")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "your_client_secret")
-JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_key")
-JWT_ALGORITHM = "HS256"
 
 @router.get("/github/login")
 def github_login():
@@ -75,7 +67,7 @@ async def github_callback(code: str, db: Session = Depends(get_db)):
             db.refresh(user)
 
     # 4. Issue JWT token using database user's id
-    jwt_token = jwt.encode({"sub": user.id, "login": login}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    jwt_token = jwt.encode({"sub": str(user.id), "login": login}, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
     # 5. Redirect back to frontend with the token in query params (or handle via cookie)
     return RedirectResponse(f"http://localhost:5173?token={jwt_token}")
